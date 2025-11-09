@@ -19,31 +19,23 @@ st.set_page_config(page_title="ML Visualizer", layout="centered")
 
 # --- FUNCTION: SET BACKGROUND IMAGE WITH SEMI-TRANSPARENT PANEL ---
 def set_background(image_file):
-    import base64
     with open(image_file, "rb") as image:
         encoded = base64.b64encode(image.read()).decode()
 
     st.markdown(f"""
         <style>
-        /* === SIDEBAR GRADIENT STYLE === */
         [data-testid="stSidebar"] {{
-            background: linear-gradient(135deg, #ff0000, #0000ff); /* red to blue gradient */
+            background: linear-gradient(135deg, #ff0000, #0000ff);
             color: white !important;
         }}
-
-        /* === SIDEBAR TEXT === */
         [data-testid="stSidebar"] * {{
-            color: white !important; /* all sidebar text white */
+            color: white !important;
         }}
-
-        /* === SIDEBAR HEADER === */
         section[data-testid="stSidebar"] h2 {{
             color: #ffffff !important;
             text-align: center;
             text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
         }}
-
-        /* === SIDEBAR BUTTONS === */
         .stButton>button {{
             background-color: rgba(255,255,255,0.2);
             color: white;
@@ -55,16 +47,12 @@ def set_background(image_file):
             background-color: rgba(255,255,255,0.4);
             color: black;
         }}
-
-        /* === BACKGROUND IMAGE === */
         [data-testid="stAppViewContainer"] {{
             background: url("data:image/jpeg;base64,{encoded}");
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
         }}
-
-        /* === FROSTED GLASS PANEL === */
         [data-testid="stAppViewBlockContainer"] {{
             background: rgba(0, 0, 0, 0.55);
             backdrop-filter: blur(30px);
@@ -75,8 +63,6 @@ def set_background(image_file):
             box-shadow: 0 8px 25px rgba(0,0,0,0.5);
             max-width: 1100px;
         }}
-
-        /* === TEXT VISIBILITY === */
         [data-testid="stAppViewBlockContainer"] * {{
             color: #f5f5f5 !important;
         }}
@@ -86,11 +72,7 @@ def set_background(image_file):
 # --- APPLY BACKGROUND ---
 set_background("bg.jpg")
 
-# # --- START THE CENTER PANEL ---
-# st.markdown('<div class="center-panel">', unsafe_allow_html=True)
-
 # --- MAIN TITLE ---
-# st.title("🧠 Lightweight ML Model Visualizer")
 st.markdown(
     """
     <div style="
@@ -108,11 +90,11 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
 # --- UPLOAD CSV ---
 st.sidebar.header("📂 Upload CSV")
 uploaded_file = st.sidebar.file_uploader("Upload a CSV file", type="csv")
 
+# --- MAIN LOGIC ---
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 
@@ -150,6 +132,8 @@ if uploaded_file is not None:
         le_target = LabelEncoder()
         y = le_target.fit_transform(y)
         st.info("🎯 Target column encoded.")
+    else:
+        le_target = None
 
     X = df.drop(columns=[target_col])
 
@@ -165,13 +149,13 @@ if uploaded_file is not None:
         "Support Vector Machine (SVM)",
         "K-Nearest Neighbors (KNN)",
         "Naive Bayes"
-    ))
+    ), key="model_select")
+
     test_size = st.slider("Test size (split ratio)", 0.1, 0.5, 0.2)
 
-    if st.button("🚀 Train Model"):
+    if st.button("🚀 Train Model", key="train_btn"):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 
-        # --- CHOOSE MODEL ---
         if model_name == "Logistic Regression":
             model = LogisticRegression(max_iter=200)
         elif model_name == "Decision Tree":
@@ -188,15 +172,13 @@ if uploaded_file is not None:
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
 
-        # Save model in session state
         st.session_state["trained_model"] = model
         st.session_state["X_columns"] = list(X.columns)
-        st.session_state["le_target"] = le_target if 'le_target' in locals() else None
+        st.session_state["le_target"] = le_target
 
         acc = accuracy_score(y_test, y_pred)
         st.success(f"✅ Model trained successfully! Accuracy: **{acc:.2f}**")
 
-        # --- MODEL DOWNLOAD OPTION ---
         buffer = io.BytesIO()
         pickle.dump(model, buffer)
         buffer.seek(0)
@@ -207,8 +189,6 @@ if uploaded_file is not None:
             file_name=f"{model_name.replace(' ', '_')}_model.pkl",
             mime="application/octet-stream"
         )
-        st.info("You can download this trained model as a .pkl file and use it later for predictions!")
-
 
         st.subheader("📊 Confusion Matrix")
         cm = confusion_matrix(y_test, y_pred)
@@ -225,7 +205,6 @@ if uploaded_file is not None:
             title="Confusion Matrix"
         )
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
-
         for i in range(cm.shape[0]):
             for j in range(cm.shape[1]):
                 ax.text(j, i, format(cm[i, j], 'd'), ha="center", va="center", color="black")
@@ -244,44 +223,33 @@ if uploaded_file is not None:
         else:
             st.info("ℹ️ Feature importance is not available for this model type.")
 
-                # --- CUSTOM INPUT TESTING ---
-        st.subheader("🧪 Test the Model on Custom Input")
-        test_choice = st.radio("Do you want to test the trained model with your own data?", ("No", "Yes"))
+# --- TESTING SECTION (Always visible after training) ---
+if "trained_model" in st.session_state:
+    st.subheader("🧪 Test the Model on Custom Input")
+    test_choice = st.radio(
+        "Do you want to test the trained model with your own data?",
+        ("No", "Yes"),
+        key="custom_test_choice"
+    )
 
-        if test_choice == "Yes":
-            if "trained_model" not in st.session_state:
-                st.warning("⚠️ Please train a model first before testing.")
-            else:
-                model = st.session_state["trained_model"]
-                X_cols = st.session_state["X_columns"]
-                le_target = st.session_state["le_target"]
+    if test_choice == "Yes":
+        model = st.session_state["trained_model"]
+        X_cols = st.session_state["X_columns"]
+        le_target = st.session_state["le_target"]
 
-                st.info("Enter feature values below:")
-                user_input = []
-                for feature in X_cols:
-                    val = st.text_input(f"Enter value for **{feature}**:")
-                    user_input.append(val)
+        st.info("Enter feature values below:")
+        user_input = []
+        for feature in X_cols:
+            val = st.text_input(f"Enter value for **{feature}**:", key=f"input_{feature}")
+            user_input.append(val)
 
-                if st.button("🔍 Predict on Custom Input"):
-                    try:
-                        cleaned_input = []
-                        for v in user_input:
-                            if v.strip() == "":
-                                cleaned_input.append(0.0)
-                            else:
-                                cleaned_input.append(float(v))
-
-                        input_df = pd.DataFrame([cleaned_input], columns=X_cols)
-                        pred = model.predict(input_df)[0]
-
-                        if le_target is not None:
-                            pred = le_target.inverse_transform([pred])[0]
-
-                        st.success(f"🎯 Predicted Class: **{pred}**")
-
-                    except Exception as e:
-                        st.error(f"⚠️ Error during prediction: {e}")
-
-
-
-st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("🔍 Predict on Custom Input", key="predict_btn"):
+            try:
+                cleaned_input = [float(v) if v.strip() != "" else 0.0 for v in user_input]
+                input_df = pd.DataFrame([cleaned_input], columns=X_cols)
+                pred = model.predict(input_df)[0]
+                if le_target is not None:
+                    pred = le_target.inverse_transform([pred])[0]
+                st.success(f"🎯 Predicted Class: **{pred}**")
+            except Exception as e:
+                st.error(f"⚠️ Error during prediction: {e}")
