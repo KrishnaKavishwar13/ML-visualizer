@@ -4,5 +4,4 @@ scikit-learn
 matplotlib
 seaborn
 shap
-eli5
-pickle
+eli5
